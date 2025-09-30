@@ -29,6 +29,51 @@ describe('mysqldump.e2e', () => {
             /INSERT INTO\n {2}`date_types`/,
         );
 
+        it('should only include specified columns when columns option is provided', async () => {
+            // ACT
+            const res = await mysqldump({
+                connection: config,
+                dump: {
+                    tables: ['date_types'],
+                    schema: false,
+                    trigger: false,
+                    data: {
+                        format: false,
+                        columns: {
+                            date_types: ['dt_id', 'dt_date'],
+                        },
+                    },
+                },
+            });
+
+            // ASSERT
+            expect(res.dump.data).toMatch(
+                /INSERT INTO `date_types` \(`dt_id`,`dt_date`\)/,
+            );
+            expect(res.dump.data).not.toMatch(/dt_datetime/);
+            expect(res.dump.data).not.toMatch(/dt_timestamp/);
+        });
+
+        it('should include all columns when columns option is not provided', async () => {
+            // ACT
+            const res = await mysqldump({
+                connection: config,
+                dump: {
+                    tables: ['date_types'],
+                    schema: false,
+                    trigger: false,
+                    data: {
+                        format: false,
+                    },
+                },
+            });
+
+            // ASSERT
+            expect(res.dump.data).toMatch(
+                /INSERT INTO `date_types` \(`dt_id`,`dt_date`,`dt_datetime`,`dt_timestamp`,`dt_time`,`dt_year`\)/,
+            );
+        });
+
         it('should return data from the call if configured', async () => {
             // ACT
             const res = await mysqldump({

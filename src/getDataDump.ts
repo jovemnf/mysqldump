@@ -15,12 +15,12 @@ function buildInsert(
     table: Table,
     values: Array<string>,
     format: (s: string) => string,
+    selectedColumns?: Array<string>,
 ): string {
+    const columns = selectedColumns || table.columnsOrdered;
     const sql = format(
         [
-            `INSERT INTO \`${table.name}\` (\`${table.columnsOrdered.join(
-                '`,`',
-            )}\`)`,
+            `INSERT INTO \`${table.name}\` (\`${columns.join('`,`')}\`)`,
             `VALUES ${values.join(',')};`,
         ].join(' '),
     );
@@ -29,8 +29,13 @@ function buildInsert(
     // this undoes the wrapping we did to get around the formatting
     return sql.replace(/NOFORMAT_WRAP\("##(.+?)##"\)/g, '$1');
 }
-function buildInsertValue(row: QueryRes, table: Table): string {
-    return `(${table.columnsOrdered.map(c => row[c]).join(',')})`;
+function buildInsertValue(
+    row: QueryRes,
+    table: Table,
+    selectedColumns?: Array<string>,
+): string {
+    const columns = selectedColumns || table.columnsOrdered;
+    return `(${columns.map(c => row[c]).join(',')})`;
 }
 
 function executeSql(connection: mysql.Connection, sql: string): Promise<void> {
@@ -154,8 +159,19 @@ async function getDataDump(
                 const where = options.where[table.name]
                     ? ` WHERE ${options.where[table.name]}`
                     : '';
+
+                // determine which columns to select
+                const selectedColumns =
+                    options.columns && options.columns[table.name]
+                        ? options.columns[table.name]
+                        : undefined;
+
+                const columnsToSelect = selectedColumns
+                    ? `\`${selectedColumns.join('`,`')}\``
+                    : '*';
+
                 const query = connection.query(
-                    `SELECT * FROM \`${table.name}\`${where}`,
+                    `SELECT ${columnsToSelect} FROM \`${table.name}\`${where}`,
                 );
 
                 let rowQueue: Array<string> = [];
@@ -163,12 +179,19 @@ async function getDataDump(
                 // stream the data to the file
                 query.on('result', (row: QueryRes) => {
                     // build the values list
-                    rowQueue.push(buildInsertValue(row, table));
+                    rowQueue.push(
+                        buildInsertValue(row, table, selectedColumns),
+                    );
 
                     // if we've got a full queue
                     if (rowQueue.length === options.maxRowsPerInsertStatement) {
                         // create and write a fresh statement
-                        const insert = buildInsert(table, rowQueue, format);
+                        const insert = buildInsert(
+                            table,
+                            rowQueue,
+                            format,
+                            selectedColumns,
+                        );
                         saveChunk(insert);
                         rowQueue = [];
                     }
@@ -176,12 +199,17 @@ async function getDataDump(
                 query.on('end', () => {
                     // write the remaining rows to disk
                     if (rowQueue.length > 0) {
-                        const insert = buildInsert(table, rowQueue, format);
+                        const insert = buildInsert(
+                            table,
+                            rowQueue,
+                            format,
+                            selectedColumns,
+                        );
                         saveChunk(insert);
                         rowQueue = [];
                     }
 
-                    resolve();
+                    resolve(void 0);
                 });
                 query.on(
                     'error',
@@ -218,7 +246,7 @@ async function getDataDump(
         // tidy up the file stream, making sure writes are 100% flushed before continuing
         await new Promise(resolve => {
             outFileStream.once('finish', () => {
-                resolve();
+                resolve(void 0);
             });
             outFileStream.end();
         });

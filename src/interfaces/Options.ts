@@ -204,6 +204,15 @@ interface DataDumpOptions {
     where?: {
         [k: string]: string;
     };
+    /**
+     * A map of tables to specific columns to include in the dump.
+     * If not specified for a table, all columns will be included.
+     * Use this to limit which columns are dumped for each table.
+     * Defaults to including all columns.
+     */
+    columns?: {
+        [k: string]: Array<string>;
+    };
 }
 
 interface DumpOptions {
