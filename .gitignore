@@ -6,6 +6,7 @@ coverage/
 build-decl/
 .rpt2_cache/
 
-dist/**/*.js
-dist/**/*.js.map
+# dist/**/*.js
+# dist/**/*.js.map
+# Comentado para permitir que os arquivos compilados sejam commitados
 yarn-error.log
