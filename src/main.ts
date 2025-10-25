@@ -181,22 +181,30 @@ export default async function main(inputOptions: Options): Promise<DumpReturn> {
                 .trim();
         }
 
-        // dump the routines if requested
+        // data dump uses its own connection so kill ours
+        await connection.end();
+
+        // dump the routines if requested (using a new connection)
         if (options.dump.routine !== false) {
-            res.dump.routine = await getRoutineDump(
-                connection,
-                options.connection.database,
-                options.dump.routine,
+            // Create a new connection for routines
+            const routineConnection = await DB.connect(
+                merge([options.connection, { multipleStatements: true }]),
             );
+            try {
+                res.dump.routine = await getRoutineDump(
+                    routineConnection,
+                    options.connection.database,
+                    options.dump.routine,
+                );
+            } finally {
+                await routineConnection.end();
+            }
         }
 
         // write the routines to the file
         if (options.dumpToFile && res.dump.routine) {
             fs.appendFileSync(options.dumpToFile, `${res.dump.routine}\n\n`);
         }
-
-        // data dump uses its own connection so kill ours
-        await connection.end();
 
         // dump data if requested
         if (options.dump.data !== false) {

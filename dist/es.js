@@ -270,7 +270,7 @@ function getRoutineDump(connection, dbName, options) {
         }
         const routinesQuery = `
         SELECT ROUTINE_NAME, ROUTINE_TYPE, ROUTINE_DEFINITION, DEFINER, 
-               SQL_DATA_ACCESS, IS_DETERMINISTIC, SQL_SECURITY, ROUTINE_COMMENT
+               SQL_DATA_ACCESS, IS_DETERMINISTIC, ROUTINE_COMMENT
         FROM information_schema.ROUTINES 
         WHERE ROUTINE_SCHEMA = '${dbName}'
         AND ROUTINE_TYPE IN (${routineTypes.join(',')})
@@ -282,6 +282,7 @@ function getRoutineDump(connection, dbName, options) {
         }
         // Get CREATE statements for each routine
         const createStatements = [];
+        // Process routines one by one with proper error handling
         for (const routine of routines) {
             try {
                 const createQuery = `SHOW CREATE ${routine.ROUTINE_TYPE} \`${routine.ROUTINE_NAME}\``;
@@ -1010,16 +1011,23 @@ function main(inputOptions) {
                     .join('\n')
                     .trim();
             }
-            // dump the routines if requested
+            // data dump uses its own connection so kill ours
+            yield connection.end();
+            // dump the routines if requested (using a new connection)
             if (options.dump.routine !== false) {
-                res.dump.routine = yield getRoutineDump(connection, options.connection.database, options.dump.routine);
+                // Create a new connection for routines
+                const routineConnection = yield DB.connect(all([options.connection, { multipleStatements: true }]));
+                try {
+                    res.dump.routine = yield getRoutineDump(routineConnection, options.connection.database, options.dump.routine);
+                }
+                finally {
+                    yield routineConnection.end();
+                }
             }
             // write the routines to the file
             if (options.dumpToFile && res.dump.routine) {
                 appendFileSync(options.dumpToFile, `${res.dump.routine}\n\n`);
             }
-            // data dump uses its own connection so kill ours
-            yield connection.end();
             // dump data if requested
             if (options.dump.data !== false) {
                 // don't even try to run the data dump

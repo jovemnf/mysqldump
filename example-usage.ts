@@ -1,16 +1,18 @@
 import mysqldump from './src/main';
 
+const connection = {
+    host: 'localhost',
+    user: 'root',
+    password: '12345678',
+    database: 'casat',
+};
+
 // Exemplo de uso com as novas funcionalidades
 async function exemploUso() {
     try {
         // Exemplo 1: Incluir apenas stored procedures, excluindo functions e views
         const dump1 = await mysqldump({
-            connection: {
-                host: 'localhost',
-                user: 'root',
-                password: 'password',
-                database: 'meu_banco',
-            },
+            connection,
             dump: {
                 schema: {
                     includeViews: false, // Excluir views do schema
@@ -29,12 +31,7 @@ async function exemploUso() {
 
         // Exemplo 2: Incluir apenas functions, excluindo procedures e views
         const dump2 = await mysqldump({
-            connection: {
-                host: 'localhost',
-                user: 'root',
-                password: 'password',
-                database: 'meu_banco',
-            },
+            connection,
             dump: {
                 schema: {
                     includeViews: false, // Excluir views do schema
@@ -53,12 +50,7 @@ async function exemploUso() {
 
         // Exemplo 3: Incluir views separadamente (sem procedures/functions)
         const dump3 = await mysqldump({
-            connection: {
-                host: 'localhost',
-                user: 'root',
-                password: 'password',
-                database: 'meu_banco',
-            },
+            connection,
             dump: {
                 schema: {
                     includeViews: true, // Incluir views no schema
@@ -72,12 +64,7 @@ async function exemploUso() {
 
         // Exemplo 4: Dump completo com separação
         const dump4 = await mysqldump({
-            connection: {
-                host: 'localhost',
-                user: 'root',
-                password: 'password',
-                database: 'meu_banco',
-            },
+            connection,
             dump: {
                 schema: {
                     includeViews: false, // Views serão incluídas separadamente

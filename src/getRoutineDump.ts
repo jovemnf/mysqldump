@@ -10,7 +10,6 @@ interface ShowRoutines {
     DEFINER: string;
     SQL_DATA_ACCESS: string;
     IS_DETERMINISTIC: string;
-    SQL_SECURITY: string;
     ROUTINE_COMMENT: string;
 }
 
@@ -37,7 +36,7 @@ async function getRoutineDump(
 
     const routinesQuery = `
         SELECT ROUTINE_NAME, ROUTINE_TYPE, ROUTINE_DEFINITION, DEFINER, 
-               SQL_DATA_ACCESS, IS_DETERMINISTIC, SQL_SECURITY, ROUTINE_COMMENT
+               SQL_DATA_ACCESS, IS_DETERMINISTIC, ROUTINE_COMMENT
         FROM information_schema.ROUTINES 
         WHERE ROUTINE_SCHEMA = '${dbName}'
         AND ROUTINE_TYPE IN (${routineTypes.join(',')})
@@ -52,11 +51,14 @@ async function getRoutineDump(
 
     // Get CREATE statements for each routine
     const createStatements = [];
+
+    // Process routines one by one with proper error handling
     for (const routine of routines) {
         try {
             const createQuery = `SHOW CREATE ${routine.ROUTINE_TYPE} \`${
                 routine.ROUTINE_NAME
             }\``;
+
             const createResult = await connection.query<ShowCreateRoutine>(
                 createQuery,
             );
