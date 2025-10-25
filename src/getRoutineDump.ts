@@ -53,54 +53,62 @@ async function getRoutineDump(
     // Get CREATE statements for each routine
     const createStatements = [];
     for (const routine of routines) {
-        const createQuery = `SHOW CREATE ${routine.ROUTINE_TYPE} \`${
-            routine.ROUTINE_NAME
-        }\``;
-        const createResult = await connection.query<ShowCreateRoutine>(
-            createQuery,
-        );
+        try {
+            const createQuery = `SHOW CREATE ${routine.ROUTINE_TYPE} \`${
+                routine.ROUTINE_NAME
+            }\``;
+            const createResult = await connection.query<ShowCreateRoutine>(
+                createQuery,
+            );
 
-        if (createResult.length > 0) {
-            let sql = createResult[0]['Create Routine'];
+            if (createResult.length > 0) {
+                let sql = createResult[0]['Create Routine'];
 
-            // Clean up the generated SQL
-            if (!options.definer) {
-                sql = sql.replace(/CREATE DEFINER=.+?@.+? /, 'CREATE ');
+                // Clean up the generated SQL
+                if (!options.definer) {
+                    sql = sql.replace(/CREATE DEFINER=.+?@.+? /, 'CREATE ');
+                }
+
+                // Add delimiter if specified
+                if (options.delimiter) {
+                    sql = `DELIMITER ${options.delimiter}\n${sql}${
+                        options.delimiter
+                    }\nDELIMITER ;`;
+                } else {
+                    sql = `${sql};`;
+                }
+
+                // Add drop statement if requested
+                if (options.dropIfExist) {
+                    const dropStatement = `DROP ${
+                        routine.ROUTINE_TYPE
+                    } IF EXISTS \`${routine.ROUTINE_NAME}\`;`;
+                    sql = `${dropStatement}\n${sql}`;
+                }
+
+                // Format the SQL
+                sql = format(sql);
+
+                // Add header
+                const header = [
+                    '# ------------------------------------------------------------',
+                    `# ROUTINE DUMP FOR: ${routine.ROUTINE_NAME} (${
+                        routine.ROUTINE_TYPE
+                    })`,
+                    '# ------------------------------------------------------------',
+                    '',
+                    sql,
+                    '',
+                ].join('\n');
+
+                createStatements.push(header);
             }
-
-            // Add delimiter if specified
-            if (options.delimiter) {
-                sql = `DELIMITER ${options.delimiter}\n${sql}${
-                    options.delimiter
-                }\nDELIMITER ;`;
-            } else {
-                sql = `${sql};`;
-            }
-
-            // Add drop statement if requested
-            if (options.dropIfExist) {
-                const dropStatement = `DROP ${
-                    routine.ROUTINE_TYPE
-                } IF EXISTS \`${routine.ROUTINE_NAME}\`;`;
-                sql = `${dropStatement}\n${sql}`;
-            }
-
-            // Format the SQL
-            sql = format(sql);
-
-            // Add header
-            const header = [
-                '# ------------------------------------------------------------',
-                `# ROUTINE DUMP FOR: ${routine.ROUTINE_NAME} (${
-                    routine.ROUTINE_TYPE
-                })`,
-                '# ------------------------------------------------------------',
-                '',
-                sql,
-                '',
-            ].join('\n');
-
-            createStatements.push(header);
+        } catch (error) {
+            console.warn(
+                `Erro ao obter rotina ${routine.ROUTINE_NAME}:`,
+                error,
+            );
+            // Continue com a próxima rotina
         }
     }
 

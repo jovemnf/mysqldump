@@ -283,38 +283,44 @@ function getRoutineDump(connection, dbName, options) {
         // Get CREATE statements for each routine
         const createStatements = [];
         for (const routine of routines) {
-            const createQuery = `SHOW CREATE ${routine.ROUTINE_TYPE} \`${routine.ROUTINE_NAME}\``;
-            const createResult = yield connection.query(createQuery);
-            if (createResult.length > 0) {
-                let sql = createResult[0]['Create Routine'];
-                // Clean up the generated SQL
-                if (!options.definer) {
-                    sql = sql.replace(/CREATE DEFINER=.+?@.+? /, 'CREATE ');
+            try {
+                const createQuery = `SHOW CREATE ${routine.ROUTINE_TYPE} \`${routine.ROUTINE_NAME}\``;
+                const createResult = yield connection.query(createQuery);
+                if (createResult.length > 0) {
+                    let sql = createResult[0]['Create Routine'];
+                    // Clean up the generated SQL
+                    if (!options.definer) {
+                        sql = sql.replace(/CREATE DEFINER=.+?@.+? /, 'CREATE ');
+                    }
+                    // Add delimiter if specified
+                    if (options.delimiter) {
+                        sql = `DELIMITER ${options.delimiter}\n${sql}${options.delimiter}\nDELIMITER ;`;
+                    }
+                    else {
+                        sql = `${sql};`;
+                    }
+                    // Add drop statement if requested
+                    if (options.dropIfExist) {
+                        const dropStatement = `DROP ${routine.ROUTINE_TYPE} IF EXISTS \`${routine.ROUTINE_NAME}\`;`;
+                        sql = `${dropStatement}\n${sql}`;
+                    }
+                    // Format the SQL
+                    sql = format$$1(sql);
+                    // Add header
+                    const header = [
+                        '# ------------------------------------------------------------',
+                        `# ROUTINE DUMP FOR: ${routine.ROUTINE_NAME} (${routine.ROUTINE_TYPE})`,
+                        '# ------------------------------------------------------------',
+                        '',
+                        sql,
+                        '',
+                    ].join('\n');
+                    createStatements.push(header);
                 }
-                // Add delimiter if specified
-                if (options.delimiter) {
-                    sql = `DELIMITER ${options.delimiter}\n${sql}${options.delimiter}\nDELIMITER ;`;
-                }
-                else {
-                    sql = `${sql};`;
-                }
-                // Add drop statement if requested
-                if (options.dropIfExist) {
-                    const dropStatement = `DROP ${routine.ROUTINE_TYPE} IF EXISTS \`${routine.ROUTINE_NAME}\`;`;
-                    sql = `${dropStatement}\n${sql}`;
-                }
-                // Format the SQL
-                sql = format$$1(sql);
-                // Add header
-                const header = [
-                    '# ------------------------------------------------------------',
-                    `# ROUTINE DUMP FOR: ${routine.ROUTINE_NAME} (${routine.ROUTINE_TYPE})`,
-                    '# ------------------------------------------------------------',
-                    '',
-                    sql,
-                    '',
-                ].join('\n');
-                createStatements.push(header);
+            }
+            catch (error) {
+                console.warn(`Erro ao obter rotina ${routine.ROUTINE_NAME}:`, error);
+                // Continue com a próxima rotina
             }
         }
         return createStatements.join('\n');
@@ -1004,6 +1010,14 @@ function main(inputOptions) {
                     .join('\n')
                     .trim();
             }
+            // dump the routines if requested
+            if (options.dump.routine !== false) {
+                res.dump.routine = yield getRoutineDump(connection, options.connection.database, options.dump.routine);
+            }
+            // write the routines to the file
+            if (options.dumpToFile && res.dump.routine) {
+                appendFileSync(options.dumpToFile, `${res.dump.routine}\n\n`);
+            }
             // data dump uses its own connection so kill ours
             yield connection.end();
             // dump data if requested
@@ -1016,18 +1030,6 @@ function main(inputOptions) {
                     .filter(t => t)
                     .join('\n')
                     .trim();
-            }
-            // write the triggers to the file
-            if (options.dumpToFile && res.dump.trigger) {
-                appendFileSync(options.dumpToFile, `${res.dump.trigger}\n\n`);
-            }
-            // dump the routines if requested
-            if (options.dump.routine !== false) {
-                res.dump.routine = yield getRoutineDump(connection, options.connection.database, options.dump.routine);
-            }
-            // write the routines to the file
-            if (options.dumpToFile && res.dump.routine) {
-                appendFileSync(options.dumpToFile, `${res.dump.routine}\n\n`);
             }
             // reset all of the variables
             if (options.dumpToFile) {

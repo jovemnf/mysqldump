@@ -181,6 +181,20 @@ export default async function main(inputOptions: Options): Promise<DumpReturn> {
                 .trim();
         }
 
+        // dump the routines if requested
+        if (options.dump.routine !== false) {
+            res.dump.routine = await getRoutineDump(
+                connection,
+                options.connection.database,
+                options.dump.routine,
+            );
+        }
+
+        // write the routines to the file
+        if (options.dumpToFile && res.dump.routine) {
+            fs.appendFileSync(options.dumpToFile, `${res.dump.routine}\n\n`);
+        }
+
         // data dump uses its own connection so kill ours
         await connection.end();
 
@@ -199,25 +213,6 @@ export default async function main(inputOptions: Options): Promise<DumpReturn> {
                 .filter(t => t)
                 .join('\n')
                 .trim();
-        }
-
-        // write the triggers to the file
-        if (options.dumpToFile && res.dump.trigger) {
-            fs.appendFileSync(options.dumpToFile, `${res.dump.trigger}\n\n`);
-        }
-
-        // dump the routines if requested
-        if (options.dump.routine !== false) {
-            res.dump.routine = await getRoutineDump(
-                connection,
-                options.connection.database,
-                options.dump.routine,
-            );
-        }
-
-        // write the routines to the file
-        if (options.dumpToFile && res.dump.routine) {
-            fs.appendFileSync(options.dumpToFile, `${res.dump.routine}\n\n`);
         }
 
         // reset all of the variables
