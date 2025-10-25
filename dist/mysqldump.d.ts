@@ -92,6 +92,11 @@ export interface SchemaDumpOptions {
 	 */
 	format?: boolean;
 	/**
+	 * True to include views in the schema dump, false otherwise.
+	 * Defaults to true.
+	 */
+	includeViews?: boolean;
+	/**
 	 * Options for table dumps
 	 */
 	table?: {
@@ -154,6 +159,34 @@ export interface TriggerDumpOptions {
 	 * Defaults to false.
 	 */
 	definer?: boolean;
+}
+export interface RoutineDumpOptions {
+	/**
+	 * True to include stored procedures in the dump, false otherwise.
+	 * Defaults to true.
+	 */
+	includeProcedures?: boolean;
+	/**
+	 * True to include functions in the dump, false otherwise.
+	 * Defaults to true.
+	 */
+	includeFunctions?: boolean;
+	/**
+	 * Include the `DEFINER = {\`user\`@\`host\` | CURRENT_USER}` in the routine definition or not
+	 * Defaults to false.
+	 */
+	definer?: boolean;
+	/**
+	 * Drop routines before creation.
+	 * Defaults to false.
+	 */
+	dropIfExist?: boolean;
+	/**
+	 * The temporary delimiter to use between statements.
+	 * Set to false to not use delimiters
+	 * Defaults to ';;'.
+	 */
+	delimiter?: string | false;
 }
 export interface DataDumpOptions {
 	/**
@@ -236,6 +269,11 @@ export interface DumpOptions {
 	 * Defaults to including the triggers.
 	 */
 	trigger?: false | TriggerDumpOptions;
+	/**
+	 * Explicitly set to false to not include routines (procedures and functions) in the dump.
+	 * Defaults to including the routines.
+	 */
+	routine?: false | RoutineDumpOptions;
 }
 export interface Options {
 	/**
@@ -324,6 +362,11 @@ export interface DumpReturn {
 		 * Null if configured not to dump.
 		 */
 		trigger: string | null;
+		/**
+		 * The concatenated SQL routine dump (procedures and functions) for the entire database.
+		 * Null if configured not to dump.
+		 */
+		routine: string | null;
 	};
 	tables: Array<Table>;
 }

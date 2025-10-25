@@ -103,15 +103,19 @@ function getSchemaDump(connection, options, tables) {
         const format$$1 = options.format
             ? (sql) => format(sql)
             : (sql) => sql;
+        // Filter tables based on includeViews option
+        const tablesToProcess = options.includeViews
+            ? tables
+            : tables.filter(t => !t.isView);
         // we create a multi query here so we can query all at once rather than in individual connections
-        const getSchemaMultiQuery = tables
+        const getSchemaMultiQuery = tablesToProcess
             .map(t => `SHOW CREATE TABLE \`${t.name}\`;`)
             .join('\n');
         const createStatements = (yield connection.multiQuery(getSchemaMultiQuery))
             // mysql2 returns an array of arrays which will all have our one row
             .map(r => r[0])
             .map((res, i) => {
-            const table = tables[i];
+            const table = tablesToProcess[i];
             if (isCreateView(res)) {
                 return Object.assign({}, table, { name: res.View, schema: format$$1(res['Create View']), data: null, isView: true });
             }
@@ -249,6 +253,71 @@ function getTriggerDump(connection, dbName, options, tables) {
             return table;
         });
         return tables;
+    });
+}
+
+function getRoutineDump(connection, dbName, options) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const format$$1 = (sql) => format(sql);
+        // Get list of routines
+        const routineTypes = [];
+        if (options.includeProcedures)
+            routineTypes.push("'PROCEDURE'");
+        if (options.includeFunctions)
+            routineTypes.push("'FUNCTION'");
+        if (routineTypes.length === 0) {
+            return '';
+        }
+        const routinesQuery = `
+        SELECT ROUTINE_NAME, ROUTINE_TYPE, ROUTINE_DEFINITION, DEFINER, 
+               SQL_DATA_ACCESS, IS_DETERMINISTIC, SQL_SECURITY, ROUTINE_COMMENT
+        FROM information_schema.ROUTINES 
+        WHERE ROUTINE_SCHEMA = '${dbName}'
+        AND ROUTINE_TYPE IN (${routineTypes.join(',')})
+        ORDER BY ROUTINE_TYPE, ROUTINE_NAME
+    `;
+        const routines = yield connection.query(routinesQuery);
+        if (routines.length === 0) {
+            return '';
+        }
+        // Get CREATE statements for each routine
+        const createStatements = [];
+        for (const routine of routines) {
+            const createQuery = `SHOW CREATE ${routine.ROUTINE_TYPE} \`${routine.ROUTINE_NAME}\``;
+            const createResult = yield connection.query(createQuery);
+            if (createResult.length > 0) {
+                let sql = createResult[0]['Create Routine'];
+                // Clean up the generated SQL
+                if (!options.definer) {
+                    sql = sql.replace(/CREATE DEFINER=.+?@.+? /, 'CREATE ');
+                }
+                // Add delimiter if specified
+                if (options.delimiter) {
+                    sql = `DELIMITER ${options.delimiter}\n${sql}${options.delimiter}\nDELIMITER ;`;
+                }
+                else {
+                    sql = `${sql};`;
+                }
+                // Add drop statement if requested
+                if (options.dropIfExist) {
+                    const dropStatement = `DROP ${routine.ROUTINE_TYPE} IF EXISTS \`${routine.ROUTINE_NAME}\`;`;
+                    sql = `${dropStatement}\n${sql}`;
+                }
+                // Format the SQL
+                sql = format$$1(sql);
+                // Add header
+                const header = [
+                    '# ------------------------------------------------------------',
+                    `# ROUTINE DUMP FOR: ${routine.ROUTINE_NAME} (${routine.ROUTINE_TYPE})`,
+                    '# ------------------------------------------------------------',
+                    '',
+                    sql,
+                    '',
+                ].join('\n');
+                createStatements.push(header);
+            }
+        }
+        return createStatements.join('\n');
     });
 }
 
@@ -849,6 +918,13 @@ const defaultOptions = {
             dropIfExist: true,
             definer: false,
         },
+        routine: {
+            includeProcedures: true,
+            includeFunctions: true,
+            definer: false,
+            dropIfExist: false,
+            delimiter: ';;',
+        },
     },
     dumpToFile: null,
 };
@@ -900,6 +976,7 @@ function main(inputOptions) {
                     schema: null,
                     data: null,
                     trigger: null,
+                    routine: null,
                 },
                 tables: yield getTables(connection, options.connection.database, options.dump.tables, options.dump.excludeTables),
             };
@@ -943,6 +1020,14 @@ function main(inputOptions) {
             // write the triggers to the file
             if (options.dumpToFile && res.dump.trigger) {
                 appendFileSync(options.dumpToFile, `${res.dump.trigger}\n\n`);
+            }
+            // dump the routines if requested
+            if (options.dump.routine !== false) {
+                res.dump.routine = yield getRoutineDump(connection, options.connection.database, options.dump.routine);
+            }
+            // write the routines to the file
+            if (options.dumpToFile && res.dump.routine) {
+                appendFileSync(options.dumpToFile, `${res.dump.routine}\n\n`);
             }
             // reset all of the variables
             if (options.dumpToFile) {

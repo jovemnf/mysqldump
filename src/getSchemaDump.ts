@@ -29,8 +29,13 @@ async function getSchemaDump(
         ? (sql: string) => sqlformatter.format(sql)
         : (sql: string) => sql;
 
+    // Filter tables based on includeViews option
+    const tablesToProcess = options.includeViews
+        ? tables
+        : tables.filter(t => !t.isView);
+
     // we create a multi query here so we can query all at once rather than in individual connections
-    const getSchemaMultiQuery = tables
+    const getSchemaMultiQuery = tablesToProcess
         .map(t => `SHOW CREATE TABLE \`${t.name}\`;`)
         .join('\n');
     const createStatements = (await connection.multiQuery<
@@ -39,7 +44,7 @@ async function getSchemaDump(
         // mysql2 returns an array of arrays which will all have our one row
         .map(r => r[0])
         .map((res, i) => {
-            const table = tables[i];
+            const table = tablesToProcess[i];
             if (isCreateView(res)) {
                 return {
                     ...table,

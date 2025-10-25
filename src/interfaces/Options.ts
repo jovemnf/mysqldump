@@ -94,6 +94,11 @@ interface SchemaDumpOptions {
      */
     format?: boolean;
     /**
+     * True to include views in the schema dump, false otherwise.
+     * Defaults to true.
+     */
+    includeViews?: boolean;
+    /**
      * Options for table dumps
      */
     table?: {
@@ -157,6 +162,35 @@ interface TriggerDumpOptions {
      * Defaults to false.
      */
     definer?: boolean;
+}
+
+interface RoutineDumpOptions {
+    /**
+     * True to include stored procedures in the dump, false otherwise.
+     * Defaults to true.
+     */
+    includeProcedures?: boolean;
+    /**
+     * True to include functions in the dump, false otherwise.
+     * Defaults to true.
+     */
+    includeFunctions?: boolean;
+    /**
+     * Include the `DEFINER = {\`user\`@\`host\` | CURRENT_USER}` in the routine definition or not
+     * Defaults to false.
+     */
+    definer?: boolean;
+    /**
+     * Drop routines before creation.
+     * Defaults to false.
+     */
+    dropIfExist?: boolean;
+    /**
+     * The temporary delimiter to use between statements.
+     * Set to false to not use delimiters
+     * Defaults to ';;'.
+     */
+    delimiter?: string | false;
 }
 
 interface DataDumpOptions {
@@ -241,6 +275,11 @@ interface DumpOptions {
      * Defaults to including the triggers.
      */
     trigger?: false | TriggerDumpOptions;
+    /**
+     * Explicitly set to false to not include routines (procedures and functions) in the dump.
+     * Defaults to including the routines.
+     */
+    routine?: false | RoutineDumpOptions;
 }
 
 interface Options {
@@ -290,6 +329,7 @@ export {
     DataDumpOptions,
     DumpOptions,
     Options,
+    RoutineDumpOptions,
     SchemaDumpOptions,
     TriggerDumpOptions,
 };

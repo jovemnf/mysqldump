@@ -10,6 +10,7 @@ import { DumpReturn } from './interfaces/DumpReturn';
 import { getTables } from './getTables';
 import { getSchemaDump } from './getSchemaDump';
 import { getTriggerDump } from './getTriggerDump';
+import { getRoutineDump } from './getRoutineDump';
 import { getDataDump } from './getDataDump';
 import { compressFile } from './compressFile';
 import { DB } from './DB';
@@ -58,6 +59,13 @@ const defaultOptions: Options = {
             delimiter: ';;',
             dropIfExist: true,
             definer: false,
+        },
+        routine: {
+            includeProcedures: true,
+            includeFunctions: true,
+            definer: false,
+            dropIfExist: false,
+            delimiter: ';;',
         },
     },
     dumpToFile: null,
@@ -127,6 +135,7 @@ export default async function main(inputOptions: Options): Promise<DumpReturn> {
                 schema: null,
                 data: null,
                 trigger: null,
+                routine: null,
             },
             tables: await getTables(
                 connection,
@@ -195,6 +204,20 @@ export default async function main(inputOptions: Options): Promise<DumpReturn> {
         // write the triggers to the file
         if (options.dumpToFile && res.dump.trigger) {
             fs.appendFileSync(options.dumpToFile, `${res.dump.trigger}\n\n`);
+        }
+
+        // dump the routines if requested
+        if (options.dump.routine !== false) {
+            res.dump.routine = await getRoutineDump(
+                connection,
+                options.connection.database,
+                options.dump.routine,
+            );
+        }
+
+        // write the routines to the file
+        if (options.dumpToFile && res.dump.routine) {
+            fs.appendFileSync(options.dumpToFile, `${res.dump.routine}\n\n`);
         }
 
         // reset all of the variables
