@@ -259,6 +259,10 @@ function getTriggerDump(connection, dbName, options, tables) {
 function getRoutineDump(connection, dbName, options) {
     return __awaiter(this, void 0, void 0, function* () {
         const format$$1 = (sql) => format(sql);
+        // Verify connection is valid
+        if (!connection) {
+            throw new Error('Conexão inválida para dump de rotinas');
+        }
         // Get list of routines
         const routineTypes = [];
         if (options.includeProcedures)
@@ -276,7 +280,14 @@ function getRoutineDump(connection, dbName, options) {
         AND ROUTINE_TYPE IN (${routineTypes.join(',')})
         ORDER BY ROUTINE_TYPE, ROUTINE_NAME
     `;
-        const routines = yield connection.query(routinesQuery);
+        let routines;
+        try {
+            routines = yield connection.query(routinesQuery);
+        }
+        catch (error) {
+            console.error('Erro ao buscar lista de rotinas:', error);
+            throw new Error(`Falha ao buscar rotinas: ${error.message || error}`);
+        }
         if (routines.length === 0) {
             return '';
         }
@@ -320,7 +331,7 @@ function getRoutineDump(connection, dbName, options) {
                 }
             }
             catch (error) {
-                console.warn(`Erro ao obter rotina ${routine.ROUTINE_NAME}:`, error);
+                console.warn(`Erro ao obter rotina ${routine.ROUTINE_NAME}:`, error.message || error);
                 // Continue com a próxima rotina
             }
         }
@@ -806,6 +817,7 @@ const pool = [];
 class DB {
     // can only instantiate via DB.connect method
     constructor(connection) {
+        this.isConnected = true;
         this.connection = connection;
     }
     static connect(options) {
@@ -817,29 +829,62 @@ class DB {
     }
     query(sql) {
         return __awaiter(this, void 0, void 0, function* () {
-            const res = yield this.connection.query(sql);
-            return res[0];
+            if (!this.isConnected) {
+                throw new Error('Conexão não está ativa. Não é possível executar query.');
+            }
+            try {
+                const res = yield this.connection.query(sql);
+                return res[0];
+            }
+            catch (error) {
+                if (error.message && error.message.includes('closed state')) {
+                    this.isConnected = false;
+                    throw new Error('Conexão foi fechada inesperadamente. Verifique a configuração do banco de dados.');
+                }
+                throw error;
+            }
         });
     }
     multiQuery(sql) {
         return __awaiter(this, void 0, void 0, function* () {
-            let isMulti = true;
-            if (sql.split(';').length === 2) {
-                isMulti = false;
+            if (!this.isConnected) {
+                throw new Error('Conexão não está ativa. Não é possível executar multiQuery.');
             }
-            let res = (yield this.connection.query(sql))[0];
-            if (!isMulti) {
-                // mysql will return a non-array payload if there's only one statement in the query
-                // so standardise the res..
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                res = [res];
+            try {
+                let isMulti = true;
+                if (sql.split(';').length === 2) {
+                    isMulti = false;
+                }
+                let res = (yield this.connection.query(sql))[0];
+                if (!isMulti) {
+                    // mysql will return a non-array payload if there's only one statement in the query
+                    // so standardise the res..
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    res = [res];
+                }
+                return res;
             }
-            return res;
+            catch (error) {
+                if (error.message && error.message.includes('closed state')) {
+                    this.isConnected = false;
+                    throw new Error('Conexão foi fechada inesperadamente. Verifique a configuração do banco de dados.');
+                }
+                throw error;
+            }
         });
     }
     end() {
         return __awaiter(this, void 0, void 0, function* () {
-            yield this.connection.end().catch(() => { });
+            if (this.isConnected) {
+                try {
+                    yield this.connection.end();
+                    this.isConnected = false;
+                }
+                catch (error) {
+                    console.warn('Erro ao fechar conexão:', error);
+                    this.isConnected = false;
+                }
+            }
         });
     }
     static cleanup() {
@@ -989,13 +1034,19 @@ function main(inputOptions) {
             };
             // dump the schema if requested
             if (options.dump.schema !== false) {
-                const tables = res.tables;
-                res.tables = yield getSchemaDump(connection, options.dump.schema, tables);
-                res.dump.schema = res.tables
-                    .map(t => t.schema)
-                    .filter(t => t)
-                    .join('\n')
-                    .trim();
+                try {
+                    const tables = res.tables;
+                    res.tables = yield getSchemaDump(connection, options.dump.schema, tables);
+                    res.dump.schema = res.tables
+                        .map(t => t.schema)
+                        .filter(t => t)
+                        .join('\n')
+                        .trim();
+                }
+                catch (error) {
+                    console.error('Erro ao fazer dump do schema:', error);
+                    throw error;
+                }
             }
             // write the schema to the file
             if (options.dumpToFile && res.dump.schema) {
@@ -1003,25 +1054,52 @@ function main(inputOptions) {
             }
             // dump the triggers if requested
             if (options.dump.trigger !== false) {
-                const tables = res.tables;
-                res.tables = yield getTriggerDump(connection, options.connection.database, options.dump.trigger, tables);
-                res.dump.trigger = res.tables
-                    .map(t => t.triggers.join('\n'))
-                    .filter(t => t)
-                    .join('\n')
-                    .trim();
+                try {
+                    const tables = res.tables;
+                    res.tables = yield getTriggerDump(connection, options.connection.database, options.dump.trigger, tables);
+                    res.dump.trigger = res.tables
+                        .map(t => t.triggers.join('\n'))
+                        .filter(t => t)
+                        .join('\n')
+                        .trim();
+                }
+                catch (error) {
+                    console.error('Erro ao fazer dump dos triggers:', error);
+                    throw error;
+                }
             }
-            // data dump uses its own connection so kill ours
-            yield connection.end();
+            // Close the main connection safely
+            try {
+                yield connection.end();
+            }
+            catch (error) {
+                console.warn('Erro ao fechar conexão principal:', error);
+            }
             // dump the routines if requested (using a new connection)
             if (options.dump.routine !== false) {
-                // Create a new connection for routines
-                const routineConnection = yield DB.connect(all([options.connection, { multipleStatements: true }]));
+                let routineConnection;
                 try {
+                    // Create a new connection for routines
+                    routineConnection = yield DB.connect(all([options.connection, { multipleStatements: true }]));
+                    // Verify connection is valid before proceeding
+                    if (!routineConnection) {
+                        throw new Error('Falha ao criar conexão para rotinas');
+                    }
                     res.dump.routine = yield getRoutineDump(routineConnection, options.connection.database, options.dump.routine);
                 }
+                catch (error) {
+                    console.error('Erro ao fazer dump das rotinas:', error);
+                    throw error;
+                }
                 finally {
-                    yield routineConnection.end();
+                    if (routineConnection) {
+                        try {
+                            yield routineConnection.end();
+                        }
+                        catch (error) {
+                            console.warn('Erro ao fechar conexão de rotinas:', error);
+                        }
+                    }
                 }
             }
             // write the routines to the file

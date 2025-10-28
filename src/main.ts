@@ -147,17 +147,22 @@ export default async function main(inputOptions: Options): Promise<DumpReturn> {
 
         // dump the schema if requested
         if (options.dump.schema !== false) {
-            const tables = res.tables;
-            res.tables = await getSchemaDump(
-                connection,
-                options.dump.schema,
-                tables,
-            );
-            res.dump.schema = res.tables
-                .map(t => t.schema)
-                .filter(t => t)
-                .join('\n')
-                .trim();
+            try {
+                const tables = res.tables;
+                res.tables = await getSchemaDump(
+                    connection,
+                    options.dump.schema,
+                    tables,
+                );
+                res.dump.schema = res.tables
+                    .map(t => t.schema)
+                    .filter(t => t)
+                    .join('\n')
+                    .trim();
+            } catch (error) {
+                console.error('Erro ao fazer dump do schema:', error);
+                throw error;
+            }
         }
 
         // write the schema to the file
@@ -167,37 +172,65 @@ export default async function main(inputOptions: Options): Promise<DumpReturn> {
 
         // dump the triggers if requested
         if (options.dump.trigger !== false) {
-            const tables = res.tables;
-            res.tables = await getTriggerDump(
-                connection,
-                options.connection.database,
-                options.dump.trigger,
-                tables,
-            );
-            res.dump.trigger = res.tables
-                .map(t => t.triggers.join('\n'))
-                .filter(t => t)
-                .join('\n')
-                .trim();
+            try {
+                const tables = res.tables;
+                res.tables = await getTriggerDump(
+                    connection,
+                    options.connection.database,
+                    options.dump.trigger,
+                    tables,
+                );
+                res.dump.trigger = res.tables
+                    .map(t => t.triggers.join('\n'))
+                    .filter(t => t)
+                    .join('\n')
+                    .trim();
+            } catch (error) {
+                console.error('Erro ao fazer dump dos triggers:', error);
+                throw error;
+            }
         }
 
-        // data dump uses its own connection so kill ours
-        await connection.end();
+        // Close the main connection safely
+        try {
+            await connection.end();
+        } catch (error) {
+            console.warn('Erro ao fechar conexão principal:', error);
+        }
 
         // dump the routines if requested (using a new connection)
         if (options.dump.routine !== false) {
-            // Create a new connection for routines
-            const routineConnection = await DB.connect(
-                merge([options.connection, { multipleStatements: true }]),
-            );
+            let routineConnection;
             try {
+                // Create a new connection for routines
+                routineConnection = await DB.connect(
+                    merge([options.connection, { multipleStatements: true }]),
+                );
+
+                // Verify connection is valid before proceeding
+                if (!routineConnection) {
+                    throw new Error('Falha ao criar conexão para rotinas');
+                }
+
                 res.dump.routine = await getRoutineDump(
                     routineConnection,
                     options.connection.database,
                     options.dump.routine,
                 );
+            } catch (error) {
+                console.error('Erro ao fazer dump das rotinas:', error);
+                throw error;
             } finally {
-                await routineConnection.end();
+                if (routineConnection) {
+                    try {
+                        await routineConnection.end();
+                    } catch (error) {
+                        console.warn(
+                            'Erro ao fechar conexão de rotinas:',
+                            error,
+                        );
+                    }
+                }
             }
         }
 

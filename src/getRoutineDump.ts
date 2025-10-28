@@ -25,6 +25,11 @@ async function getRoutineDump(
 ): Promise<string> {
     const format = (sql: string) => sqlformatter.format(sql);
 
+    // Verify connection is valid
+    if (!connection) {
+        throw new Error('Conexão inválida para dump de rotinas');
+    }
+
     // Get list of routines
     const routineTypes = [];
     if (options.includeProcedures) routineTypes.push("'PROCEDURE'");
@@ -43,7 +48,13 @@ async function getRoutineDump(
         ORDER BY ROUTINE_TYPE, ROUTINE_NAME
     `;
 
-    const routines = await connection.query<ShowRoutines>(routinesQuery);
+    let routines;
+    try {
+        routines = await connection.query<ShowRoutines>(routinesQuery);
+    } catch (error) {
+        console.error('Erro ao buscar lista de rotinas:', error);
+        throw new Error(`Falha ao buscar rotinas: ${error.message || error}`);
+    }
 
     if (routines.length === 0) {
         return '';
@@ -108,7 +119,7 @@ async function getRoutineDump(
         } catch (error) {
             console.warn(
                 `Erro ao obter rotina ${routine.ROUTINE_NAME}:`,
-                error,
+                error.message || error,
             );
             // Continue com a próxima rotina
         }

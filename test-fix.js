@@ -1,37 +1,53 @@
-const mysqldump = require('./dist/cjs.js').default;
+const mysqldump = require('./dist/cjs.js');
 
-async function testFix() {
+// Configuração baseada no seu exemplo
+const config = {
+    connection: {
+        host: 'localhost',
+        user: 'root',
+        password: '12345678',
+        database: 'casat',
+    },
+    dump: {
+        data: false,
+        schema: {
+            format: true,
+            includeViews: false, // Excluir views do schema
+        },
+        routine: {
+            includeProcedures: true, // Incluir stored procedures
+            includeFunctions: true, // Incluir functions
+            dropIfExist: true,
+        },
+    },
+    dumpToFile: './test-backup.sql',
+    compressFile: false,
+};
+
+console.log('Configuração de teste:');
+console.log(JSON.stringify(config, null, 2));
+
+async function testBackup() {
     try {
-        console.log('Testando correção do erro de conexão...');
+        console.log('Iniciando backup...');
 
-        const result = await mysqldump({
-            connection: {
-                host: 'localhost',
-                user: 'root',
-                password: 'password',
-                database: 'test_db',
-            },
-            dump: {
-                schema: {
-                    includeViews: false,
-                },
-                routine: {
-                    includeProcedures: true,
-                    includeFunctions: true,
-                    definer: false,
-                    dropIfExist: false,
-                },
-                data: false,
-                trigger: false,
-            },
-        });
+        const result = await mysqldump(config);
 
-        console.log('✅ Teste bem-sucedido!');
-        console.log('Schema:', result.dump.schema ? 'Presente' : 'Ausente');
-        console.log('Routines:', result.dump.routine ? 'Presente' : 'Ausente');
+        console.log('Backup concluído com sucesso!');
+        console.log('Schema:', result.dump.schema ? 'Gerado' : 'Não gerado');
+        console.log(
+            'Rotinas:',
+            result.dump.routine ? 'Geradas' : 'Não geradas',
+        );
+        console.log(
+            'Triggers:',
+            result.dump.trigger ? 'Gerados' : 'Não gerados',
+        );
+        console.log('Tabelas encontradas:', result.tables.length);
     } catch (error) {
-        console.error('❌ Erro no teste:', error.message);
+        console.error('Erro durante o backup:', error.message);
+        console.error('Stack trace:', error.stack);
     }
 }
 
-testFix();
+testBackup();
