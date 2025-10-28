@@ -640,6 +640,7 @@ function getDataDump(connectionOptions, options, tables, dumpToFile) {
     return __awaiter(this, void 0, void 0, function* () {
         // ensure we have a non-zero max row option
         options.maxRowsPerInsertStatement = Math.max(options.maxRowsPerInsertStatement, 0);
+        console.log('Start Dumping Data');
         // clone the array
         tables = [...tables];
         // build the format function if requested

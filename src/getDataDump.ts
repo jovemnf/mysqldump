@@ -59,6 +59,8 @@ async function getDataDump(
         0,
     );
 
+    console.log('Start Dumping Data');
+
     // clone the array
     tables = [...tables];
 
