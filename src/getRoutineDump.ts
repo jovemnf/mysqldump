@@ -15,7 +15,8 @@ interface ShowRoutines {
 
 interface ShowCreateRoutine {
     ROUTINE_NAME: string;
-    'Create Routine': string;
+    'Create Function'?: string;
+    'Create Procedure'?: string;
 }
 
 async function getRoutineDump(
@@ -74,47 +75,65 @@ async function getRoutineDump(
                 createQuery,
             );
 
-            if (createResult.length > 0) {
-                let sql = createResult[0]['Create Routine'];
+            if (
+                createResult.length > 0 &&
+                createResult[0] &&
+                (createResult[0]['Create Function'] ||
+                    createResult[0]['Create Procedure'])
+            ) {
+                let sql =
+                    createResult[0]['Create Function'] ||
+                    createResult[0]['Create Procedure'];
 
                 // Clean up the generated SQL
-                if (!options.definer) {
+                if (!options.definer && sql) {
                     sql = sql.replace(/CREATE DEFINER=.+?@.+? /, 'CREATE ');
                 }
 
                 // Add delimiter if specified
-                if (options.delimiter) {
+                if (options.delimiter && sql) {
                     sql = `DELIMITER ${options.delimiter}\n${sql}${
                         options.delimiter
                     }\nDELIMITER ;`;
-                } else {
+                } else if (sql) {
                     sql = `${sql};`;
                 }
 
                 // Add drop statement if requested
-                if (options.dropIfExist) {
+                if (options.dropIfExist && sql) {
                     const dropStatement = `DROP ${
                         routine.ROUTINE_TYPE
                     } IF EXISTS \`${routine.ROUTINE_NAME}\`;`;
                     sql = `${dropStatement}\n${sql}`;
                 }
 
-                // Format the SQL
-                sql = format(sql);
+                // Format the SQL only if it exists
+                if (sql) {
+                    sql = format(sql);
+                }
 
-                // Add header
-                const header = [
-                    '# ------------------------------------------------------------',
-                    `# ROUTINE DUMP FOR: ${routine.ROUTINE_NAME} (${
-                        routine.ROUTINE_TYPE
-                    })`,
-                    '# ------------------------------------------------------------',
-                    '',
-                    sql,
-                    '',
-                ].join('\n');
+                // Only add to statements if we have valid SQL
+                if (sql && sql.trim()) {
+                    // Add header
+                    const header = [
+                        '# ------------------------------------------------------------',
+                        `# ROUTINE DUMP FOR: ${routine.ROUTINE_NAME} (${
+                            routine.ROUTINE_TYPE
+                        })`,
+                        '# ------------------------------------------------------------',
+                        '',
+                        sql,
+                        '',
+                    ].join('\n');
 
-                createStatements.push(header);
+                    createStatements.push(header);
+                } else {
+                    console.warn(
+                        `⚠️  Rotina ${
+                            routine.ROUTINE_NAME
+                        } não possui SQL válido, pulando...`,
+                    );
+                }
             }
         } catch (error) {
             console.warn(
