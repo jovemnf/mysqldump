@@ -3315,6 +3315,16 @@ mysql2@^2.1.0:
     seq-queue "^0.0.5"
     sqlstring "^2.3.1"
 
+"mysqldump@git+https://github.com/jovemnf/mysqldump.git#46404dda24fbfb63ba4896ac8f048d5a849baf0d":
+  version "3.2.1"
+  resolved "git+ssh://git@github.com/jovemnf/mysqldump.git#46404dda24fbfb63ba4896ac8f048d5a849baf0d"
+  integrity sha512-uDFcF5prJ5g2ga85SwT2WKV3uhqhA+Ftv4ChNEIlvkDguvU6+XcLSS+ow0F/icFSSbTFy+1VloUltKCGXu0A0w==
+  dependencies:
+    deepmerge "^3.2.0"
+    mysql2 "^2.1.0"
+    sql-formatter "^2.3.2"
+    sqlstring "^2.3.1"
+
 named-placeholders@^1.1.2:
   version "1.1.2"
   resolved "https://registry.npmjs.org/named-placeholders/-/named-placeholders-1.1.2.tgz"
